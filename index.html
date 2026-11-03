@@ -1,0 +1,183 @@
+
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kamera Morning Briefing</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: Arial, sans-serif;
+      background: #f1f5f9;
+      color: #1e293b;
+      margin: 0;
+      padding: 20px;
+      text-align: center;
+    }
+    .card {
+      max-width: 600px;
+      margin: 20px auto;
+      padding: 20px;
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 4px 18px #0001;
+    }
+    h2 { color: #164e63; }
+    video, canvas {
+      width: 100%;
+      max-height: 65vh;
+      background: #0f172a;
+      border-radius: 12px;
+      object-fit: contain;
+    }
+    canvas { display: none; }
+    button, select {
+      padding: 13px 16px;
+      margin: 6px;
+      border: 0;
+      border-radius: 9px;
+      font-size: 15px;
+    }
+    button {
+      background: #0f766e;
+      color: white;
+      cursor: pointer;
+    }
+    button:disabled { opacity: .5; cursor: not-allowed; }
+    #status { margin: 15px 0; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>Kamera Dokumentasi</h2>
+    <p>Izinkan akses kamera saat browser memintanya.</p>
+
+    <select id="cameraChoice" aria-label="Pilih kamera">
+      <option value="environment">Kamera belakang</option>
+      <option value="user">Kamera depan</option>
+    </select>
+
+    <div>
+      <video id="video" autoplay playsinline muted></video>
+      <canvas id="canvas"></canvas>
+    </div>
+
+    <div>
+      <button id="startBtn">Aktifkan Kamera</button>
+      <button id="captureBtn" disabled>Ambil Foto</button>
+      <button id="retakeBtn" disabled>Ulangi</button>
+      <button id="sendBtn" disabled>Kirim Foto</button>
+    </div>
+
+    <div id="status">Kamera belum diaktifkan.</div>
+  </div>
+
+<script>
+  const video = document.getElementById('video');
+  const canvas = document.getElementById('canvas');
+  const statusBox = document.getElementById('status');
+  const startBtn = document.getElementById('startBtn');
+  const captureBtn = document.getElementById('captureBtn');
+  const retakeBtn = document.getElementById('retakeBtn');
+  const sendBtn = document.getElementById('sendBtn');
+  const cameraChoice = document.getElementById('cameraChoice');
+
+  let stream = null;
+  let photoData = null;
+
+  function showStatus(message) {
+    statusBox.textContent = message;
+  }
+
+  async function startCamera() {
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error('Browser tidak mendukung akses kamera. Gunakan Chrome atau Safari terbaru.');
+      }
+
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+      }
+
+      showStatus('Meminta izin kamera...');
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: false,
+        video: {
+          facingMode: { ideal: cameraChoice.value },
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        }
+      });
+
+      video.srcObject = stream;
+      await video.play();
+
+      captureBtn.disabled = false;
+      showStatus('Kamera aktif. Silakan ambil foto.');
+    } catch (error) {
+      showStatus('Kamera gagal dibuka: ' + error.name + ' — ' + error.message);
+    }
+  }
+
+  startBtn.addEventListener('click', startCamera);
+  cameraChoice.addEventListener('change', startCamera);
+
+  captureBtn.addEventListener('click', () => {
+    if (!video.videoWidth) {
+      showStatus('Kamera belum siap. Coba beberapa saat lagi.');
+      return;
+    }
+
+    const maxWidth = 1280;
+    const scale = Math.min(1, maxWidth / video.videoWidth);
+    canvas.width = Math.round(video.videoWidth * scale);
+    canvas.height = Math.round(video.videoHeight * scale);
+
+    const context = canvas.getContext('2d');
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    photoData = canvas.toDataURL('image/jpeg', 0.75);
+    video.style.display = 'none';
+    canvas.style.display = 'block';
+
+    retakeBtn.disabled = false;
+    sendBtn.disabled = false;
+    captureBtn.disabled = true;
+    showStatus('Foto berhasil diambil. Periksa hasilnya, lalu klik Kirim Foto.');
+  });
+
+  retakeBtn.addEventListener('click', () => {
+    photoData = null;
+    canvas.style.display = 'none';
+    video.style.display = 'block';
+    captureBtn.disabled = false;
+    retakeBtn.disabled = true;
+    sendBtn.disabled = true;
+    showStatus('Silakan ambil foto kembali.');
+  });
+
+  sendBtn.addEventListener('click', () => {
+    if (!photoData) return;
+
+    if (!window.opener || window.opener.closed) {
+      showStatus('Halaman Morning Briefing tidak ditemukan. Buka kamera melalui tombol di halaman Morning Briefing.');
+      return;
+    }
+
+    window.opener.postMessage({
+      type: 'MORNING_BRIEFING_PHOTO',
+      data: photoData,
+      fileName: 'kamera-' + Date.now() + '.jpg'
+    }, '*');
+
+    showStatus('Foto dikirim. Anda dapat kembali ke halaman Morning Briefing.');
+    sendBtn.disabled = true;
+  });
+
+  window.addEventListener('beforeunload', () => {
+    if (stream) stream.getTracks().forEach(track => track.stop());
+  });
+</script>
+</body>
+</html>
