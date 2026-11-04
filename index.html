@@ -158,22 +158,30 @@
   });
 
   sendBtn.addEventListener('click', () => {
-    if (!photoData) return;
+  if (!photoData) {
+    showStatus('Belum ada foto yang diambil.');
+    return;
+  }
 
-    if (!window.opener || window.opener.closed) {
-      showStatus('Halaman Morning Briefing tidak ditemukan. Buka kamera melalui tombol di halaman Morning Briefing.');
-      return;
-    }
+  if (!window.opener || window.opener.closed) {
+    showStatus('Gagal: halaman Morning Briefing tidak terhubung.');
+    return;
+  }
 
+  try {
     window.opener.postMessage({
       type: 'MORNING_BRIEFING_PHOTO',
       data: photoData,
       fileName: 'kamera-' + Date.now() + '.jpg'
     }, '*');
 
-    showStatus('Foto dikirim. Anda dapat kembali ke halaman Morning Briefing.');
+    showStatus('Foto berhasil dikirim ke Morning Briefing. Silakan kembali ke halaman aplikasi.');
     sendBtn.disabled = true;
-  });
+
+  } catch (error) {
+    showStatus('Gagal mengirim foto: ' + error.message);
+  }
+});
 
   window.addEventListener('beforeunload', () => {
     if (stream) stream.getTracks().forEach(track => track.stop());
